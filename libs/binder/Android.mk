@@ -50,7 +50,7 @@ LOCAL_CFLAGS += -DBINDER_IPC_32BIT=1
 endif
 endif
 LOCAL_CFLAGS += -Werror
-LOCAL_CFLAGS += -fno-wrapv -fsanitize=integer -fsanitize-undefined-trap-on-error
+LOCAL_CFLAGS += -fno-wrapv -fsanitize=integer,object-size -fsanitize-undefined-trap-on-error
 LOCAL_CLANG := true
 include $(BUILD_SHARED_LIBRARY)
 
@@ -64,6 +64,6 @@ LOCAL_CFLAGS += -DBINDER_IPC_32BIT=1
 endif
 endif
 LOCAL_CFLAGS += -Werror
-LOCAL_CFLAGS += -fno-wrapv -fsanitize=integer -fsanitize-undefined-trap-on-error
+LOCAL_CFLAGS += -fno-wrapv -fsanitize=integer,object-size -fsanitize-undefined-trap-on-error
 LOCAL_CLANG := true
 include $(BUILD_STATIC_LIBRARY)
