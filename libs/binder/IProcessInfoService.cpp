@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <stdlib.h>
+
 #include <binder/IProcessInfoService.h>
 #include <binder/Parcel.h>
 #include <utils/Errors.h>
@@ -69,12 +71,22 @@ status_t BnProcessInfoService::onTransact( uint32_t code, const Parcel& data, Pa
             }
 
             size_t len = static_cast<size_t>(arrayLen);
-            int32_t pids[len];
+            if (len * sizeof(int32_t) < len) {
+                return NO_MEMORY;
+            }
+            int32_t* pids = reinterpret_cast<int32_t*>(malloc(len * sizeof(int32_t)));
+            if (!pids) {
+                return NO_MEMORY;
+            }
             status_t res = data.read(pids, len * sizeof(*pids));
 
             // Ignore output array length returned in the parcel here, as the states array must
             // always be the same length as the input PIDs array.
-            int32_t states[len];
+            int32_t* states = reinterpret_cast<int32_t*>(malloc(len * sizeof(int32_t)));
+            if (!states) {
+                free(pids);
+                return NO_MEMORY;
+            }
             for (size_t i = 0; i < len; i++) states[i] = -1;
             if (res == NO_ERROR) {
                 res = getProcessStatesFromPids(len, /*in*/ pids, /*out*/ states);
@@ -82,6 +94,10 @@ status_t BnProcessInfoService::onTransact( uint32_t code, const Parcel& data, Pa
             reply->writeNoException();
             reply->writeInt32Array(len, states);
             reply->writeInt32(res);
+
+            free(states);
+            free(pids);
+
             return NO_ERROR;
         } break;
         default:
