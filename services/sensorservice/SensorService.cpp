@@ -1949,6 +1949,20 @@ bool SensorService::canAccessSensor(const Sensor& sensor, const char* operation,
         } else {
             canAccess = true;
         }
+    } else {
+        int targetSdkVersion = getTargetSdkVersion(opPackageName);
+        if (targetSdkVersion > 0 && targetSdkVersion <= __ANDROID_API_P__ &&
+            (sensor.getType() == SENSOR_TYPE_STEP_COUNTER ||
+             sensor.getType() == SENSOR_TYPE_STEP_DETECTOR)) {
+
+            // upstream allows access to these sensors without the ACTIVITY_RECOGNITION permission
+            // for targetSdk < 29 apps, enforce the OTHER_SENSORS permission instead
+            const String16 requiredPermission("android.permission.OTHER_SENSORS");
+
+            // copied from hasPermissionForSensor() below
+            canAccess = checkPermission(requiredPermission,
+                IPCThreadState::self()->getCallingPid(), IPCThreadState::self()->getCallingUid());
+         }
     }
 
     if (!canAccess) {
