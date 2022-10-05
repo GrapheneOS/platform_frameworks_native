@@ -132,4 +132,10 @@ interface IPackageManagerNative {
      * Returns null if no such APEX is found.
      */
     @nullable StagedApexInfo getStagedApexInfo(in @utf8InCpp String moduleName);
+
+    /**
+     * App attempted to perform an operation that is protected with a a special runtime permission
+     * and failed due to that permission being denied.
+     */
+    oneway void onDeniedSpecialRuntimePermissionOp(in String permissionName, int uid, in String packageName);
 }
