@@ -17,6 +17,7 @@
 #include "Access.h"
 
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <binder/IPCThreadState.h>
 #include <log/log_safetynet.h>
 #include <selinux/android.h>
@@ -111,6 +112,13 @@ Access::CallingContext Access::getCallingContext() {
 }
 
 bool Access::canFind(const CallingContext& ctx,const std::string& name) {
+    if (name == "com.google.edgetpu.IEdgeTpuAppService/default") {
+        if (!base::GetBoolProperty("persist.sys.allow_google_apps_special_access_to_accelerators", true)) {
+            LOG(DEBUG) << "denied uid " << ctx.uid << " access to " << name <<  "\n";
+            return false;
+        }
+    }
+
     return actionAllowedFromLookup(ctx, name, "find");
 }
 
