@@ -18,6 +18,9 @@
 
 # This script will run as a postinstall step to drive otapreopt.
 
+echo "otapreopt is disabled"
+exit 0
+
 TARGET_SLOT="$1"
 STATUS_FD="$2"
 
