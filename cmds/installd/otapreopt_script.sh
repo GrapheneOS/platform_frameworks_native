@@ -20,6 +20,9 @@
 # OTA package, but runs /system/bin/otapreopt_chroot in the (old) active system
 # image. See system/extras/postinst/postinst.sh for some docs.
 
+echo "otapreopt is disabled"
+exit 0
+
 TARGET_SLOT="$1"
 STATUS_FD="$2"
 
