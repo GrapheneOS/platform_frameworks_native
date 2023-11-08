@@ -1925,11 +1925,10 @@ Dumpstate::RunStatus Dumpstate::DumpstateDefaultAfterCritical() {
     DumpIpTablesAsRoot();
     DumpDynamicPartitionInfo();
     ds.AddDir(OTA_METADATA_DIR, true);
-    if (!PropertiesHelper::IsUserBuild()) {
-        // Include dropbox entry files inside ZIP, but exclude
-        // noisy WTF and StrictMode entries
-        dump_files("", DROPBOX_DIR, skip_wtf_strictmode, _add_file_from_fd);
-    }
+
+    // Include dropbox entry files inside ZIP, but exclude
+    // noisy WTF and StrictMode entries
+    dump_files("", DROPBOX_DIR, skip_wtf_strictmode, _add_file_from_fd);
 
     // Capture any IPSec policies in play. No keys are exposed here.
     RunCommand("IP XFRM POLICY", {"ip", "xfrm", "policy"}, CommandOptions::WithTimeout(10).Build());
