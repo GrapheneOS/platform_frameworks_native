@@ -6312,9 +6312,10 @@ status_t SurfaceFlinger::doDump(int fd, const DumpArgs& args, bool asProto) {
     const int uid = ipc->getCallingUid();
 
     if ((uid != AID_SHELL) && !PermissionCache::checkPermission(sDump, pid, uid)) {
-        StringAppendF(&result, "Permission Denial: can't dump SurfaceFlinger from pid=%d, uid=%d\n",
-                      pid, uid);
-        write(fd, result.c_str(), result.size());
+        ALOGD("doDump: callingPid %i, callingUid %i, asProto %i", pid, uid, (int) asProto);
+        for (auto &arg : args) {
+            ALOGD("doDump: arg %s", String8(arg).c_str());
+        }
         return NO_ERROR;
     }
 
