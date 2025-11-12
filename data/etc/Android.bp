@@ -23,6 +23,66 @@ prebuilt_defaults {
 // for all dependent modules. It is simpler to just use new path names.
 
 prebuilt_etc {
+    name: "android.hardware.audio.pro.prebuilt.xml",
+    src: "android.hardware.audio.pro.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.device_unique_attestation.prebuilt.xml",
+    src: "android.hardware.device_unique_attestation.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.opengles.aep.prebuilt.xml",
+    src: "android.hardware.opengles.aep.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.strongbox_keystore.prebuilt.xml",
+    src: "android.hardware.strongbox_keystore.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.touchscreen.multitouch.jazzhand.prebuilt.xml",
+    src: "android.hardware.touchscreen.multitouch.jazzhand.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.wifi.aware.prebuilt.xml",
+    src: "android.hardware.wifi.aware.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.hardware.wifi.rtt.prebuilt.xml",
+    src: "android.hardware.wifi.rtt.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.software.ipsec_tunnel_migration.prebuilt.xml",
+    src: "android.software.ipsec_tunnel_migration.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.software.midi.prebuilt.xml",
+    src: "android.software.midi.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
+    name: "android.software.freeform_window_management.prebuilt.xml",
+    src: "android.software.freeform_window_management.xml",
+    defaults: ["frameworks_native_data_etc_defaults"],
+}
+
+prebuilt_etc {
     name: "android.hardware.audio.low_latency.prebuilt.xml",
     src: "android.hardware.audio.low_latency.xml",
     defaults: ["frameworks_native_data_etc_defaults"],
