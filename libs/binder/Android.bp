@@ -968,6 +968,7 @@ aidl_interface {
         "aidl/android/content/pm/ApexStagedEvent.aidl",
         "aidl/android/content/pm/IPackageManagerNative.aidl",
         "aidl/android/content/pm/IStagedApexObserver.aidl",
+        "aidl/android/content/pm/MicrophoneScopeInfo.aidl",
         "aidl/android/content/pm/PackageInfoNative.aidl",
         "aidl/android/content/pm/SignatureNative.aidl",
         "aidl/android/content/pm/SigningInfoNative.aidl",

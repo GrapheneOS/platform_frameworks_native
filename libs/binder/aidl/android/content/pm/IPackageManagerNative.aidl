@@ -18,6 +18,7 @@
 package android.content.pm;
 
 import android.content.pm.IStagedApexObserver;
+import android.content.pm.MicrophoneScopeInfo;
 import android.content.pm.PackageInfoNative;
 import android.content.pm.StagedApexInfo;
 
@@ -179,4 +180,11 @@ interface IPackageManagerNative {
      * and failed due to that permission being denied.
      */
     oneway void onDeniedSpecialRuntimePermissionOp(in String permissionName, int uid, in String packageName);
+
+    /**
+     * Returns microphone scope information for the given UID.
+     * Used by audio system to determine if microphone input should be spoofed.
+     * Returns null if microphone scopes are not enabled for any package with this UID.
+     */
+    @nullable MicrophoneScopeInfo getMicrophoneScopeInfo(int uid, int userId);
 }
