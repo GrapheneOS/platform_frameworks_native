@@ -3997,6 +3997,81 @@ bool SurfaceFlinger::configureLocked() {
     }
 
     for (const auto [hwcDisplayId, event] : events) {
+        // Work around a bug in android.hardware.composer.hwc3-service.pixel where
+        // ExynosExternalDisplay::closeExternalDisplay() does not clean up its mIgnoreLayers vector.
+        // When disconnecting an external display, destroy all HWC layers for the external display
+        // before onHotplug() removes the AIDL writer. This ensures that
+        // ExynosDisplay::destroyLayer() gets called in Pixel HWC which cleans both mLayers and
+        // mIgnoreLayers.
+        //
+        // clearOutputLayers() triggers the following destructor chain:
+        //
+        // Output::clearOutputLayers() [compositionengine/impl/Output.h]
+        //   -> vector<unique_ptr<OutputLayer>>::clear()
+        //   -> ~OutputLayer() -> ~OutputLayerCompositionState()
+        //   -> ~Hwc() [impl/OutputLayerCompositionState.h]
+        //   -> ~shared_ptr<HWC2::Layer>() (last owner, weak_ptr in HWC2::Display::mLayers)
+        //   -> HWC2::Layer::~Layer() [HWC2.cpp]
+        //   -> onOwningDisplayDestroyed() [HWC2.cpp]
+        //   -> mDisplay->onLayerDestroyed(mId) -- erases from mLayers
+        //   -> mComposer.destroyLayer(displayId, mId) [AidlComposerHal.cpp]
+        //   -> [batching enabled] queues DESTROY in writer, not sent to HAL yet
+        //
+        // executeCommands() flushes the batched DESTROY commands to the HAL:
+        //
+        // HWComposer::executeCommands() [HWComposer.cpp]
+        //   -> AidlComposer::execute() [AidlComposerHal.cpp]
+        //     -> writer->takePendingCommands() -- drains DESTROY commands from writer
+        //     -> mAidlComposerClient->executeCommands() -- sends to HAL over AIDL
+        //       -> ExynosDisplay::destroyLayer() [hardware/google/graphics/common ExynosDisplay.cpp]
+        //         -> removes layer from mLayers or mIgnoreLayers, deletes it
+        //
+        // Both must happen before onHotplug() calls removeDisplay() which erases the writer via
+        // mWriters.erase(display) [AidlComposerHal.cpp]
+        //
+        // When command batching is enabled, then, without this fix, layers are destroyed too late
+        // by the following existing path due to command batching being enabled:
+        //
+        // onHotplug(Disconnected)
+        //   -> HWComposer::onHotplugDisconnect() [HWComposer.cpp]
+        //     -> mComposer->onHotplugDisconnect()
+        //       -> AidlComposer::removeDisplay() -- mWriters.erase(display) (**)
+        // ... (next transaction commit) ...
+        // processDisplayRemoved() [SurfaceFlinger.cpp]
+        //   -> display->disconnect()
+        //   -> HWComposer::disconnectDisplay() [HWComposer.cpp]
+        //   -> mDisplayData.erase(displayId)
+        //   -> HWC2::Display::~Display() [HWC2.cpp]
+        //   -> for each layer: onOwningDisplayDestroyed():
+        //      -> mComposer.destroyLayer() [AidlComposerHal.cpp]
+        //      -> enters getWriter(display), because mEnableLayerCommandBatchingFlag is true
+        //      -> [batching] getWriter(display) returns null
+        //         due to (**) from onHotplug(Disconnected) removing the writer -> BAD_DISPLAY
+        //      -> command never reaches HAL, layers left in mIgnoreLayers
+        //
+        // If command batching was disabled, processDisplayRemoved() -> HWC2::Display::~Display()
+        // actually gets the Pixel HWC to clear mIgnoreLayers properly, since it makes a
+        // direct mAidlComposerClient->destroyLayer call. That is, with command batching disabled,
+        // this use-after-free bug doesn't occur.
+        if (event == HWComposer::HotplugEvent::Disconnected &&
+                getHwComposer().isLayerCommandBatchingEnabled()) {
+            if (const auto displayIdOpt = getHwComposer().toPhysicalDisplayId(hwcDisplayId)) {
+                if (getHwComposer().getDisplayConnectionType(*displayIdOpt) == ui::DisplayConnectionType::External &&
+                        base::GetProperty("ro.product.manufacturer", "") == "Google") {
+                    // we're in a function called configureLocked, so assume mStateLock is being
+                    // held
+                    if (const auto display = getDisplayDeviceLocked(*displayIdOpt)) {
+                        ALOGI("Clearing output layers for external display %" PRIu64
+                              " before hotplug disconnect to work around stale pointer in"
+                              " mIgnoreLayers in Pixel HWC code",
+                              hwcDisplayId);
+                        display->getCompositionDisplay()->clearOutputLayers();
+                        getHwComposer().executeCommands(*displayIdOpt);
+                    }
+                }
+            }
+        }
+
         auto info = getHwComposer().onHotplug(hwcDisplayId, event);
         if (!info) {
             continue;
