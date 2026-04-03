@@ -59,6 +59,7 @@ public:
     MOCK_METHOD0(getCapabilities, std::vector<composer3::Capability>());
     MOCK_METHOD0(dumpDebugInfo, std::string());
     MOCK_METHOD1(registerCallback, void(HWC2::ComposerCallback&));
+    MOCK_METHOD(bool, isLayerCommandBatchingEnabled, (), (const, override));
     MOCK_METHOD1(executeCommands, Error(Display));
     MOCK_METHOD0(getMaxVirtualDisplayCount, uint32_t());
     MOCK_METHOD4(createVirtualDisplay, Error(uint32_t, uint32_t, PixelFormat*, Display*));

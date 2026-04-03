@@ -123,6 +123,9 @@ public:
 
     virtual void registerCallback(HWC2::ComposerCallback& callback) = 0;
 
+    // Whether layer lifecycle command batching is enabled (HAL capability + flag).
+    virtual bool isLayerCommandBatchingEnabled() const = 0;
+
     // Explicitly flush all pending commands in the command buffer.
     virtual Error executeCommands(Display) = 0;
 

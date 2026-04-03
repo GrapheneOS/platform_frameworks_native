@@ -67,6 +67,8 @@ public:
 
     void registerCallback(HWC2::ComposerCallback& callback) override;
 
+    bool isLayerCommandBatchingEnabled() const override;
+
     // Explicitly flush all pending commands in the command buffer.
     Error executeCommands(Display) override;
 

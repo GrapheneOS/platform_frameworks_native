@@ -690,6 +690,10 @@ status_t HWComposer::presentAndGetReleaseFences(
     return NO_ERROR;
 }
 
+bool HWComposer::isLayerCommandBatchingEnabled() const {
+    return mComposer->isLayerCommandBatchingEnabled();
+}
+
 status_t HWComposer::executeCommands(HalDisplayId displayId) {
     auto& hwcDisplay = mDisplayData[displayId].hwcDisplay;
     auto error = static_cast<hal::Error>(mComposer->executeCommands(hwcDisplay->getId()));

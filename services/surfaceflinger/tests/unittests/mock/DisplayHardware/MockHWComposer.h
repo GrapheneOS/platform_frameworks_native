@@ -58,6 +58,7 @@ public:
                 (override));
     MOCK_METHOD(status_t, presentAndGetReleaseFences,
                 (HalDisplayId, std::optional<std::chrono::steady_clock::time_point>), (override));
+    MOCK_METHOD(bool, isLayerCommandBatchingEnabled, (), (const, override));
     MOCK_METHOD(status_t, executeCommands, (HalDisplayId));
     MOCK_METHOD(ftl::Future<status_t>, setPowerMode, (PhysicalDisplayId, PowerMode), (override));
     MOCK_METHOD(status_t, setColorTransform, (HalDisplayId, const mat4&), (override));
