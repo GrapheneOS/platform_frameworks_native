@@ -291,6 +291,10 @@ AidlComposer::AidlComposer(const std::string& serviceName) {
 
 AidlComposer::~AidlComposer() = default;
 
+bool AidlComposer::isLayerCommandBatchingEnabled() const {
+    return mEnableLayerCommandBatchingFlag;
+}
+
 bool AidlComposer::isSupported(OptionalFeature feature) const {
     switch (feature) {
         case OptionalFeature::RefreshRateSwitching:
