@@ -179,4 +179,13 @@ interface IPackageManagerNative {
      * and failed due to that permission being denied.
      */
     oneway void onDeniedSpecialRuntimePermissionOp(in String permissionName, int uid, in String packageName);
+
+    /**
+     * Returns true if mic spoofing is enabled for the given UID.
+     * Checks the MIC_SPOOFING_ENABLED flag in GosPackageState for the first package
+     * associated with the UID.
+     * @hide
+     */
+    boolean isMicSpoofingEnabledForUid(int uid);
+
 }
