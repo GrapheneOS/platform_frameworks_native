@@ -22,10 +22,13 @@ cc_library_shared {
         "-Werror",
     ],
     shared_libs: [
-        "android.frameworks.stats-V2-ndk",
+        "android.frameworks.stats-V3-ndk",
+        "libandroid",
+        "libbase",
         "libbinder_ndk",
         "libexpresslog",
         "liblog",
+        "libstatspull",
         "libstatssocket",
         "libutils",
     ],
@@ -33,7 +36,7 @@ cc_library_shared {
         "include/",
     ],
     export_shared_lib_headers: [
-        "android.frameworks.stats-V2-ndk",
+        "android.frameworks.stats-V3-ndk",
     ],
     local_include_dirs: [
         "include/stats",

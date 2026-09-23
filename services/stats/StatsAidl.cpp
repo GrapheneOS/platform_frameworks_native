@@ -39,6 +39,7 @@ namespace frameworks {
 namespace stats {
 
 using ::android::expresslog::Counter;
+using ndk::ScopedAStatus;
 
 template <typename E>
 constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
@@ -266,6 +267,20 @@ ndk::ScopedAStatus StatsHal::reportVendorAtom(const VendorAtom& vendorAtom) {
     return ret <= 0 ? ndk::ScopedAStatus::fromServiceSpecificErrorWithMessage(ret,
                                                                               "report atom failed")
                     : ndk::ScopedAStatus::ok();
+}
+
+ScopedAStatus StatsHal::setPullAtomCallback(
+        int32_t atomTag, const std::optional<VendorPullAtomMetadata>& metadata __unused,
+        const std::shared_ptr<IVendorPullAtomCallback>& pullerCallback __unused) {
+    VLOG("setPullAtomCallback for atom tag %d", atomTag);
+    return ScopedAStatus::ok();
+    // return ScopedAStatus::fromServiceSpecificErrorWithMessage(1, "Feature is disabled");
+}
+
+ScopedAStatus StatsHal::clearPullAtomCallback(int32_t atomTag) {
+    VLOG("clearPullAtomCallback for atom tag %d", atomTag);
+    return ScopedAStatus::ok();
+    // return ScopedAStatus::fromServiceSpecificErrorWithMessage(1, "Feature is disabled");
 }
 
 }  // namespace stats
