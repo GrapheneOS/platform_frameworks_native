@@ -29,6 +29,12 @@ public:
      * Binder call to get vendor atom.
      */
     virtual ndk::ScopedAStatus reportVendorAtom(const VendorAtom& in_vendorAtom) override;
+
+    virtual ndk::ScopedAStatus setPullAtomCallback(
+            int32_t atomTag, const std::optional<VendorPullAtomMetadata>& metadata,
+            const std::shared_ptr<IVendorPullAtomCallback>& pullerCallback) override;
+
+    virtual ndk::ScopedAStatus clearPullAtomCallback(int32_t atomTag) override;
 };
 
 }  // namespace stats
