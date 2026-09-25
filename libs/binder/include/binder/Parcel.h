@@ -21,6 +21,7 @@
 #include <map> // for legacy reasons
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -195,6 +196,7 @@ public:
     LIBBINDER_EXPORTED status_t writeByte(int8_t val);
 
     // Take a UTF8 encoded string, convert to UTF16, write it to the parcel.
+    LIBBINDER_EXPORTED status_t writeUtf8AsUtf16(std::string_view sv);
     LIBBINDER_EXPORTED status_t writeUtf8AsUtf16(const std::string& str);
     LIBBINDER_EXPORTED status_t writeUtf8AsUtf16(const std::optional<std::string>& str);
     LIBBINDER_EXPORTED status_t writeUtf8AsUtf16(const std::unique_ptr<std::string>& str)
@@ -1018,9 +1020,7 @@ private:
         return writeString16(t);
     }
 
-    status_t writeData(const std::string& t) {
-        return writeUtf8AsUtf16(t);
-    }
+    status_t writeData(const std::string& t) { return writeUtf8AsUtf16(std::string_view(t)); }
 
     status_t writeData(const binder::unique_fd& t) { return writeUniqueFileDescriptor(t); }
 

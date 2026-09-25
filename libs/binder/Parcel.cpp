@@ -1393,9 +1393,9 @@ restart_write:
     return nullptr;
 }
 
-status_t Parcel::writeUtf8AsUtf16(const std::string& str) {
-    const uint8_t* strData = (uint8_t*)str.data();
-    const size_t strLen= str.length();
+status_t Parcel::writeUtf8AsUtf16(std::string_view sv) {
+    const uint8_t* strData = (uint8_t*)sv.data();
+    const size_t strLen = sv.size();
     const ssize_t utf16Len = utf8_to_utf16_length(strData, strLen);
     if (utf16Len < 0 || utf16Len > std::numeric_limits<int32_t>::max()) {
         return BAD_VALUE;
@@ -1417,7 +1417,9 @@ status_t Parcel::writeUtf8AsUtf16(const std::string& str) {
     return NO_ERROR;
 }
 
-
+status_t Parcel::writeUtf8AsUtf16(const std::string& str) {
+    return writeUtf8AsUtf16(std::string_view(str));
+}
 status_t Parcel::writeUtf8AsUtf16(const std::optional<std::string>& str) { return writeData(str); }
 status_t Parcel::writeUtf8AsUtf16(const std::unique_ptr<std::string>& str) { return writeData(str); }
 
