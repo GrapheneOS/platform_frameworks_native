@@ -269,6 +269,19 @@ public:
         }
         return reply.readParcelableVector(output);
     }
+
+    virtual bool isMediaDrmDeviceUniqueIdAccessAllowed(const String16& packageName) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IActivityManager::getInterfaceDescriptor());
+        data.writeString16(packageName);
+        status_t err = remote()->transact(IS_MEDIA_DRM_DEVICE_UNIQUE_ID_ACCESS_ALLOWED_TRANSACTION,
+                                          data, &reply);
+        // The identifier is sensitive, so fail closed on Binder or service exceptions.
+        if (err != NO_ERROR || ((err = reply.readExceptionCode()) != NO_ERROR)) {
+            return false;
+        }
+        return reply.readInt32() != 0;
+    }
 };
 
 // ------------------------------------------------------------------------------------
