@@ -120,16 +120,6 @@ std::optional<status_t> interceptMediaDrmDeviceUniqueId(const AIBinder_Class* cl
 }
 
 }  // namespace
-
-// Used by the legacy HIDL Binder transport through dlsym. This is an LLNDK ABI entry point without
-// a public NDK header.
-extern "C" bool AIBinder_isMediaDrmIdAccessAllowed(uid_t uid, pid_t pid) {
-    return isMediaDrmIdAccessAllowed(uid, pid);
-}
-#else
-extern "C" bool AIBinder_isMediaDrmIdAccessAllowed(uid_t, pid_t) {
-    return false;
-}
 #endif
 
 namespace ABBinderTag {
