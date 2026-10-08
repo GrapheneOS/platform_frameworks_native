@@ -22,6 +22,10 @@
 #include <binder/IPCThreadState.h>
 #include <binder/IResultReceiver.h>
 #include <binder/Trace.h>
+#if defined(__ANDROID__)
+#include <android/os/IMediaDrmIdAccessService.h>
+#include <binder/IServiceManager.h>
+#endif
 #if __has_include(<private/android_filesystem_config.h>)
 #include <private/android_filesystem_config.h>
 #endif
@@ -60,6 +64,63 @@ static const char* kClientTrace = "::client";
 static const char* kSeparator = "::";
 static const char* kUnknownCode = "#";
 static const char* kBackendType = "ndk";
+
+#if defined(__ANDROID__)
+namespace {
+
+// android.hardware.drm.Status.ERROR_DRM_CANNOT_HANDLE is a stable AIDL enum value. Depending on
+// the DRM interface here would create an inappropriate low-level Binder dependency.
+constexpr int32_t kErrorDrmCannotHandle = 4;
+
+bool isMediaDrmIdAccessAllowed(uid_t uid, pid_t pid) {
+    const uid_t appId = uid % AID_USER_OFFSET;
+    if (appId < AID_APP_START) {
+        return true;
+    }
+
+    sp<::android::IServiceManager> serviceManager = ::android::defaultServiceManager();
+    if (serviceManager == nullptr) {
+        return false;
+    }
+    sp<::android::os::IMediaDrmIdAccessService> service =
+            ::android::interface_cast<::android::os::IMediaDrmIdAccessService>(
+                    serviceManager->checkService(
+                            ::android::os::IMediaDrmIdAccessService::SERVICE_NAME()));
+    if (service == nullptr) {
+        return false;
+    }
+
+    bool allowed = false;
+    const ::android::binder::Status status = service->isAllowedFromDrmHal(uid, pid, &allowed);
+    return status.isOk() && allowed;
+}
+
+std::optional<status_t> interceptMediaDrmDeviceUniqueId(const AIBinder_Class* clazz,
+                                                        transaction_code_t code, const Parcel& data,
+                                                        Parcel* reply) {
+    bool isRequest;
+    if (const status_t status =
+                AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, code, data, &isRequest);
+        status != ::android::OK) {
+        return status;
+    }
+    if (!isRequest) {
+        return std::nullopt;
+    }
+
+    ::android::IPCThreadState* const ipc = ::android::IPCThreadState::self();
+    if (isMediaDrmIdAccessAllowed(ipc->getCallingUid(), ipc->getCallingPid())) {
+        return std::nullopt;
+    }
+    if (reply == nullptr) {
+        return ::android::BAD_VALUE;
+    }
+    return ::android::binder::Status::fromServiceSpecificError(kErrorDrmCannotHandle)
+            .writeToParcel(reply);
+}
+
+}  // namespace
+#endif
 
 namespace ABBinderTag {
 
@@ -276,6 +337,15 @@ status_t ABBinder::onTransact(transaction_code_t code, const Parcel& data, Parce
             return STATUS_BAD_TYPE;
         }
 
+#if defined(__ANDROID__)
+        if (__builtin_expect(getClass()->isMediaDrmPlugin(), false)) {
+            if (std::optional<status_t> status =
+                        interceptMediaDrmDeviceUniqueId(getClass(), code, data, reply)) {
+                return *status;
+            }
+        }
+#endif
+
         const AParcel in = AParcel::readOnly(this, &data);
         AParcel out = AParcel(this, reply, false /*owns*/);
 
@@ -469,6 +539,7 @@ AIBinder_Class::AIBinder_Class(const char* interfaceDescriptor, AIBinder_Class_o
       onDestroy(onDestroy),
       onTransact(onTransact),
       mInterfaceDescriptor(interfaceDescriptor),
+      mIsMediaDrmPlugin(mInterfaceDescriptor == "android.hardware.drm.IDrmPlugin"),
       mWideInterfaceDescriptor(interfaceDescriptor),
       mTransactionCodeData{sizeof(android::TransactionCodeData), kBackendType, nullptr, 0} {}
 

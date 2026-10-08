@@ -117,6 +117,7 @@ cc_library {
 
     target: {
         android: {
+            srcs: [":media_drm_id_access_aidl"],
             // Only one copy of this library on an Android device
             static: {
                 enabled: false,

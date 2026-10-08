@@ -35,8 +35,12 @@
 #include <binder/IResultReceiver.h>
 #include <binder/IServiceManager.h>
 #include <binder/IShellCallback.h>
+#if defined(__ANDROID__)
+#include <private/android_filesystem_config.h>
+#endif
 #include <sys/prctl.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -45,6 +49,7 @@
 #include <thread>
 
 #include "../Utils.h"
+#include "../ibinder_internal.h"
 #include "android/binder_ibinder.h"
 
 using namespace android;
@@ -60,6 +65,72 @@ constexpr char kLazyHighPriorityService[] = "LazyHighPriorityService";
 
 constexpr auto kShutdownWaitTime = 30s;
 constexpr uint64_t kContextTestValue = 0xb4e42fb4d9a1d715;
+
+#if defined(__ANDROID__)
+constexpr char kMediaDrmInterceptionHelperArgument[] = "--media-drm-interception-helper";
+const char* gExecutablePath;
+
+void* MediaDrmTestOnCreate(void* args) {
+    return args;
+}
+
+void MediaDrmTestOnDestroy(void*) {}
+
+binder_status_t MediaDrmTestOnTransact(AIBinder* binder, transaction_code_t, const AParcel*,
+                                       AParcel* out) {
+    ++*static_cast<int*>(AIBinder_getUserData(binder));
+    const ndk::ScopedAStatus status = ndk::ScopedAStatus::ok();
+    return AParcel_writeStatusHeader(out, status.get());
+}
+
+int runMediaDrmInterceptionHelper() {
+    AIBinder_Class* clazz =
+            AIBinder_Class_define("android.hardware.drm.IDrmPlugin", MediaDrmTestOnCreate,
+                                  MediaDrmTestOnDestroy, MediaDrmTestOnTransact);
+    int implementationCallCount = 0;
+    ndk::SpAIBinder binder(AIBinder_new(clazz, &implementationCallCount));
+
+    const auto transact = [&](const char* propertyName, ndk::ScopedAStatus* status) {
+        AParcel* in = nullptr;
+        if (AIBinder_prepareTransaction(binder.get(), &in) != STATUS_OK ||
+            AParcel_writeString(in, propertyName, strlen(propertyName)) != STATUS_OK) {
+            return false;
+        }
+        ndk::ScopedAParcel out;
+        if (AIBinder_transact(binder.get(), FIRST_CALL_TRANSACTION, &in, out.getR(), 0) !=
+            STATUS_OK) {
+            return false;
+        }
+        return AParcel_readStatusHeader(out.get(), status->getR()) == STATUS_OK;
+    };
+
+    ndk::ScopedAStatus deniedStatus;
+    if (!transact("deviceUniqueId", &deniedStatus)) {
+        LOG(ERROR) << "deviceUniqueId transaction failed";
+        return EXIT_FAILURE;
+    }
+    if (AStatus_getExceptionCode(deniedStatus.get()) != EX_SERVICE_SPECIFIC ||
+        AStatus_getServiceSpecificError(deniedStatus.get()) != 4) {
+        LOG(ERROR) << "unexpected denial status: " << AStatus_getDescription(deniedStatus.get());
+        return EXIT_FAILURE;
+    }
+    if (implementationCallCount != 0) {
+        LOG(ERROR) << "implementation called for denied request";
+        return EXIT_FAILURE;
+    }
+
+    ndk::ScopedAStatus unrelatedStatus;
+    if (!transact("vendorDefinedProperty", &unrelatedStatus)) {
+        LOG(ERROR) << "unrelated property transaction failed";
+        return EXIT_FAILURE;
+    }
+    if (!AStatus_isOk(unrelatedStatus.get()) || implementationCallCount != 1) {
+        LOG(ERROR) << "unrelated property was intercepted";
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+#endif
 
 class MyTestFoo : public IFoo {
     binder_status_t doubleNumber(int32_t in, int32_t* out) override {
@@ -1316,7 +1387,127 @@ TEST(NdkBinder_DeathTest, SetNullCodeMap) {
     EXPECT_DEATH(AIBinder_Class_setTransactionCodeToFunctionNameMap(nullptr, nullptr, 0), "");
 }
 
+TEST(NdkBinder, MediaDrmDeviceUniqueIdRequestPreservesParcelPosition) {
+    const char* functions[] = {"getPropertyByteArray"};
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    AIBinder_Class_setTransactionCodeToFunctionNameMap(clazz, functions, 1);
+    Parcel data;
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("deviceUniqueId")));
+    data.setDataPosition(0);
+
+    bool isRequest = false;
+    EXPECT_EQ(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_TRUE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+TEST(NdkBinder, MediaDrmUnrelatedPropertyIsNotIntercepted) {
+    const char* functions[] = {"getPropertyByteArray"};
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    AIBinder_Class_setTransactionCodeToFunctionNameMap(clazz, functions, 1);
+    Parcel data;
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("vendorDefinedProperty")));
+    data.setDataPosition(0);
+
+    bool isRequest = true;
+    EXPECT_EQ(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_FALSE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+TEST(NdkBinder, MediaDrmDeviceUniqueIdDetectedWithoutFunctionNameTable) {
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    Parcel data;
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("deviceUniqueId")));
+    data.setDataPosition(0);
+
+    bool isRequest = false;
+    EXPECT_EQ(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_TRUE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+TEST(NdkBinder, MediaDrmDeviceUniqueIdWithTrailingDataDetectedWithoutFunctionNameTable) {
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    Parcel data;
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("deviceUniqueId")));
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("value")));
+    data.setDataPosition(0);
+
+    bool isRequest = false;
+    EXPECT_EQ(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_TRUE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+TEST(NdkBinder, MediaDrmStringPropertyMethodIsNotIntercepted) {
+    const char* functions[] = {"getPropertyString"};
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    AIBinder_Class_setTransactionCodeToFunctionNameMap(clazz, functions, 1);
+    Parcel data;
+    ASSERT_EQ(OK, data.writeUtf8AsUtf16(std::string("deviceUniqueId")));
+    data.setDataPosition(0);
+
+    bool isRequest = true;
+    EXPECT_EQ(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_FALSE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+TEST(NdkBinder, MalformedMediaDrmPropertyParcelFailsBeforeDispatch) {
+    const char* functions[] = {"getPropertyByteArray"};
+    AIBinder_Class* clazz = AIBinder_Class_define("android.hardware.drm.IDrmPlugin", EmptyOnCreate,
+                                                  EmptyOnDestroy, EmptyOnTransact);
+    AIBinder_Class_setTransactionCodeToFunctionNameMap(clazz, functions, 1);
+    Parcel data;
+
+    bool isRequest = false;
+    EXPECT_NE(OK, AIBinder_isMediaDrmDeviceUniqueIdRequest(clazz, FIRST_CALL_TRANSACTION, data,
+                                                           &isRequest));
+    EXPECT_FALSE(isRequest);
+    EXPECT_EQ(0u, data.dataPosition());
+}
+
+#if defined(__ANDROID__)
+TEST(NdkBinder, MediaDrmDeviceUniqueIdDeniedBeforeImplementationDispatch) {
+    if (getuid() != AID_ROOT) {
+        GTEST_SKIP() << "requires root to execute the helper as an application UID";
+    }
+
+    const pid_t child = fork();
+    ASSERT_GE(child, 0);
+    if (child == 0) {
+        if (setuid(AID_APP_START) != 0) {
+            _exit(EXIT_FAILURE);
+        }
+        execl(gExecutablePath, gExecutablePath, kMediaDrmInterceptionHelperArgument, nullptr);
+        _exit(EXIT_FAILURE);
+    }
+
+    int status;
+    ASSERT_EQ(child, waitpid(child, &status, 0));
+    ASSERT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(EXIT_SUCCESS, WEXITSTATUS(status));
+}
+#endif
+
 int main(int argc, char* argv[]) {
+#if defined(__ANDROID__)
+    gExecutablePath = argv[0];
+    if (argc == 2 && strcmp(argv[1], kMediaDrmInterceptionHelperArgument) == 0) {
+        return runMediaDrmInterceptionHelper();
+    }
+#endif
     ::testing::InitGoogleTest(&argc, argv);
 
     if (fork() == 0) {
