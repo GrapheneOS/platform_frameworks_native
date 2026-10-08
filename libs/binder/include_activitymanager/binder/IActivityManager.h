@@ -66,7 +66,6 @@ public:
     virtual status_t registerProcessObserver(const sp<app::IProcessObserver>& observer) = 0;
     virtual status_t unregisterProcessObserver(const sp<app::IProcessObserver>& observer) = 0;
     virtual status_t getRunningAppProcesses(::std::vector<app::RunningAppProcessInfo>* output) = 0;
-    virtual bool isMediaDrmDeviceUniqueIdAccessAllowed(const String16& packageName) = 0;
 
     enum {
         OPEN_CONTENT_URI_TRANSACTION = IBinder::FIRST_CALL_TRANSACTION,
@@ -84,7 +83,6 @@ public:
         REGISTER_PROCESS_OBSERVER,
         UNREGISTER_PROCESS_OBSERVER,
         GET_RUNNING_APP_PROCESSES,
-        IS_MEDIA_DRM_DEVICE_UNIQUE_ID_ACCESS_ALLOWED_TRANSACTION,
     };
 };
 

@@ -224,6 +224,7 @@ LIBBINDER_NDK36 { # introduced=36
 
 LIBBINDER_NDK37 { # introduced=37
   global:
+    AIBinder_isMediaDrmIdAccessAllowed; # systemapi llndk
     ABinderProcess_disableBackgroundScheduling; # systemapi llndk
     AServiceManager_checkServiceAccess; # systemapi llndk
     AIBinder_setMinRpcThreads; # systemapi
