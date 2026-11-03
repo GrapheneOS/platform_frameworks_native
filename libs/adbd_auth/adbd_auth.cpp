@@ -373,7 +373,15 @@ void AdbdAuthContext::Run() {
             int rc =
                 TEMP_FAILURE_RETRY(read(framework_fd_.get(), buf, sizeof(buf)));
             if (rc == -1) {
-              PLOG(FATAL) << "adbd_auth: failed to read from framework fd";
+              // Like a failed write in SendPacket, a failed read (such as
+              // ECONNRESET when the framework closes with messages from us
+              // still unread) means the framework connection is gone. Drop it
+              // and wait for the framework to reconnect.
+              if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                PLOG(ERROR) << "adbd_auth: failed to read from framework fd";
+                std::lock_guard<std::mutex> lock(mutex_);
+                ReplaceFrameworkFd(unique_fd());
+              }
             } else if (rc == 0) {
               LOG(INFO) << "adbd_auth: hit EOF on framework fd";
               std::lock_guard<std::mutex> lock(mutex_);

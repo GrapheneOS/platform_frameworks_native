@@ -114,7 +114,22 @@ class Framework {
   }
 
   ~Framework() {
-    close(socket_);
+    Close();
+  }
+
+  // Block until a message is queued for us, without consuming it.
+  void WaitForData() const {
+    char c;
+    if (recv(socket_, &c, sizeof(c), MSG_PEEK) < 0) {
+      fail("Framework could not peek: "s + strerror(errno));
+    }
+  }
+
+  void Close() {
+    if (socket_ != -1) {
+      close(socket_);
+      socket_ = -1;
+    }
   }
 
   std::string Recv() const {
@@ -409,4 +424,35 @@ TEST(AdbAuthTest, FrameworkConnectedCallback) {
 
     // Check that the framework connection has been detected.
     ASSERT_TRUE(framework_detected);
+}
+
+// When the framework closes its socket with unread messages queued, the kernel
+// makes adbd's next read fail with ECONNRESET. That's a disconnect like EOF, so
+// adbd must drop the connection and keep accepting new ones instead of aborting.
+TEST(AdbAuthTest, FrameworkConnectionReset) {
+    AdbdAuthCallbacksV2 callbacks{};
+    callbacks.version = 2;
+    auto runner = CreateContextRunner(callbacks);
+
+    {
+        Framework framework{};
+        adbd_auth_send_tls_server_port(runner->Context(), 19);
+        framework.WaitForData();
+        // Close without reading the queued message so adbd gets ECONNRESET.
+        framework.Close();
+    }
+
+    // A new framework connection must still be served.
+    Framework framework{};
+    framework.SendAndWaitContext("XX", runner.get());
+    ASSERT_TRUE(runner->Context()->IsRunning());
+
+    const uint16_t port = 21;
+    adbd_auth_send_tls_server_port(runner->Context(), port);
+    std::string msg = framework.Recv();
+    ASSERT_EQ(4u, msg.size());
+    ASSERT_EQ(msg[0], 'T');
+    ASSERT_EQ(msg[1], 'P');
+    ASSERT_EQ(msg[2], port);
+    ASSERT_EQ(msg[3], 0);
 }
