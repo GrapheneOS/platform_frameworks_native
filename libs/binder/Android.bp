@@ -956,6 +956,12 @@ filegroup {
 }
 
 filegroup {
+    name: "media_drm_id_access_aidl",
+    srcs: ["aidl/android/os/IMediaDrmIdAccessService.aidl"],
+    path: "aidl",
+}
+
+filegroup {
     name: "libbinder_accessor_aidl",
     srcs: [
         "aidl/android/os/IAccessor.aidl",

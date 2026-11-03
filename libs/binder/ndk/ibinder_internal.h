@@ -21,12 +21,15 @@
 #include "ibinder_internal.h"
 
 #include <atomic>
+#include <cstring>
 #include <mutex>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <binder/Binder.h>
 #include <binder/IBinder.h>
+#include <binder/Parcel.h>
 #include <utils/Vector.h>
 
 inline bool isUserCommand(transaction_code_t code) {
@@ -149,6 +152,7 @@ struct AIBinder_Class {
 
     const ::android::String16& getInterfaceDescriptor() const { return mWideInterfaceDescriptor; }
     const char* getInterfaceDescriptorUtf8() const { return mInterfaceDescriptor.c_str(); }
+    bool isMediaDrmPlugin() const { return mIsMediaDrmPlugin; }
     bool setTransactionCodeMap(const char* const* transactionCodeMap,
                                size_t transactionCodeMapSize);
     const char* getFunctionName(transaction_code_t code) const;
@@ -169,6 +173,7 @@ struct AIBinder_Class {
    private:
     // Copy of the raw char string for when we don't have to return UTF-16
     const std::string mInterfaceDescriptor;
+    const bool mIsMediaDrmPlugin;
     // This must be a String16 since BBinder virtual getInterfaceDescriptor returns a reference to
     // one.
     const ::android::String16 mWideInterfaceDescriptor;
@@ -177,6 +182,39 @@ struct AIBinder_Class {
     // struct which holds names of the functions and count
     alignas(16) android::TransactionCodeData mTransactionCodeData;
 };
+
+// Identifies the stable AIDL operation protected by the MediaDrm ID policy. The Parcel is
+// positioned after the interface token, as it is in ABBinder::onTransact, and is always restored.
+inline ::android::status_t AIBinder_isMediaDrmDeviceUniqueIdRequest(const AIBinder_Class* clazz,
+                                                                    transaction_code_t code,
+                                                                    const ::android::Parcel& data,
+                                                                    bool* isRequest) {
+    *isRequest = false;
+    if (!clazz->isMediaDrmPlugin() || code < FIRST_CALL_TRANSACTION) {
+        return ::android::OK;
+    }
+    if (code - FIRST_CALL_TRANSACTION >= clazz->getTransactionCodeToFunctionLength()) {
+        return ::android::OK;
+    }
+    const char* const functionName = AIBinder_Class_getFunctionName(clazz, code);
+    if (functionName == nullptr || strcmp(functionName, "getPropertyByteArray") != 0) {
+        return ::android::OK;
+    }
+
+    const size_t position = data.dataPosition();
+    std::string propertyName;
+    const ::android::status_t status = data.readUtf8FromUtf16(&propertyName);
+    data.setDataPosition(position);
+    if (status != ::android::OK) {
+        return status;
+    }
+    const size_t nullPosition = propertyName.find('\0');
+    const std::string_view effectivePropertyName(
+            propertyName.data(), nullPosition == std::string::npos ? propertyName.size()
+                                                                    : nullPosition);
+    *isRequest = effectivePropertyName == "deviceUniqueId";
+    return ::android::OK;
+}
 
 template <typename Base, typename Parent, typename Callback, typename UnlinkedCallback>
 struct TransferRecipient : Base {
