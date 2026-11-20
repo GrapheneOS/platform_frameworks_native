@@ -37,6 +37,9 @@
       "name": "binderLibTest"
     },
     {
+      "name": "binderOnewayQueueTest"
+    },
+    {
       "name": "binderStabilityTest"
     },
     {
@@ -143,6 +146,9 @@
     },
     {
       "name": "binderLibTest"
+    },
+    {
+      "name": "binderOnewayQueueTest"
     },
     {
       "name": "binderSafeInterfaceTest"
