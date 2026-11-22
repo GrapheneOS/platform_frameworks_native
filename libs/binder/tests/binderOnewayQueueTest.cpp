@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -227,6 +228,12 @@ void notifyDelayedReader(const binder::unique_fd& fd, DelayedReader state) {
 
 void writeValue(const binder::unique_fd& fd, int32_t value) {
     (void)TEMP_FAILURE_RETRY(write(fd.get(), &value, sizeof(value)));
+}
+
+// Makes the driver flush the binder file, as every close of a descriptor for it does. The driver
+// handles the flush on a workqueue, after this returns.
+void flushBinder(int fd) {
+    close(dup(fd));
 }
 
 cpu_set_t onlyCpu(int cpu) {
@@ -1281,6 +1288,46 @@ TEST_F(BinderOnewayQueueTest, ReaderWokenForTakenCallKeepsWaiting) {
     EXPECT_EQ(0, report.emptyReads) << "a woken reader returned from the driver with nothing to do";
     printf("The released call was started by %s\n",
            report.calls[0].tid == report.calls[1].tid ? "the freeing looper" : "the woken reader");
+}
+
+// A looper that is not waiting when a flush runs has to return from its next read without waiting,
+// as in C Binder, and only from that read. A reader woken for a released call that another thread
+// takes is briefly not waiting either, and relies on this to see a close of the fd at that time.
+// That window is too short to hit from here, so this test uses a looper in userspace instead. The
+// fd is nonblocking, so a read that would wait fails with EAGAIN, and poll() shows when the driver
+// has handled the flush.
+TEST_F(BinderOnewayQueueTest, FlushReachesLooperThatIsNotWaiting) {
+    binder::unique_fd fd(open("/dev/binder", O_RDWR | O_NONBLOCK | O_CLOEXEC));
+    ASSERT_TRUE(fd.ok());
+    const uint32_t enter = BC_ENTER_LOOPER;
+    binder_write_read write = {};
+    write.write_size = sizeof(enter);
+    write.write_buffer = reinterpret_cast<binder_uintptr_t>(&enter);
+    ASSERT_EQ(0, ioctl(fd.get(), BINDER_WRITE_READ, &write));
+
+    struct pollfd readable = {.fd = fd.get(), .events = POLLIN, .revents = 0};
+    ASSERT_EQ(0, poll(&readable, 1, 0)) << "the looper had something to read before the flush";
+
+    flushBinder(fd.get());
+    const int64_t deadlineNs = nowNs() + kWakeBoundNs;
+    while (poll(&readable, 1, 0) == 0 && nowNs() < deadlineNs) {
+        usleep(1000);
+    }
+    ASSERT_TRUE(readable.revents & POLLIN) << "a flush did not reach a looper that was not waiting";
+
+    // Large enough for the driver to look for work, see kSmallReadSize.
+    uint8_t buffer[kSmallReadSize];
+    binder_write_read read = {};
+    read.read_size = sizeof(buffer);
+    read.read_buffer = reinterpret_cast<binder_uintptr_t>(buffer);
+    ASSERT_EQ(0, ioctl(fd.get(), BINDER_WRITE_READ, &read));
+    EXPECT_EQ(sizeof(uint32_t), read.read_consumed) << "the read after the flush returned work";
+
+    read.read_consumed = 0;
+    const int result = ioctl(fd.get(), BINDER_WRITE_READ, &read);
+    const int error = errno;
+    EXPECT_EQ(-1, result) << "the flush also ended the read after the one it reached";
+    EXPECT_EQ(EAGAIN, error);
 }
 
 // A synchronous call that arrives while a released call waits for the looper woken for it has to
