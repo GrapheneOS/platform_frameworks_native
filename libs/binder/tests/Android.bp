@@ -861,6 +861,33 @@ cc_test {
 }
 
 cc_test {
+    name: "binderOnewayQueueTest",
+    defaults: ["binder_test_defaults"],
+    srcs: ["binderOnewayQueueTest.cpp"],
+    shared_libs: [
+        "libbinder",
+        "libutils",
+    ],
+    test_suites: ["general-tests"],
+    require_root: true,
+}
+
+cc_test {
+    name: "binderOnewayThroughputTest",
+    defaults: ["binder_test_defaults"],
+    srcs: ["binderOnewayThroughputTest.cpp"],
+    gtest: false,
+    shared_libs: [
+        "libbinder",
+        "libutils",
+    ],
+    cflags: [
+        "-g",
+        "-O3",
+    ],
+}
+
+cc_test {
     name: "binderTextOutputTest",
     defaults: ["binder_test_defaults"],
     srcs: ["binderTextOutputTest.cpp"],
